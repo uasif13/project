@@ -90,8 +90,8 @@ cd bfs_serial
 |- percent - expected number of edges (no_of_nodes^2*percent)
 Samples:
 
-./bfs_serial 10000 0 9999 0.0003
-./bfs_serial 1000 0 999 0.003
+./bfs_serial 10000 0 9999 0.0003  
+./bfs_serial 1000 0 999 0.003  
 ./bfs_serial 100 0 99 0.03
 
 ### BFS MPI No CUDA
@@ -106,8 +106,8 @@ mpirun -n <nprocs> bfs_mpi_no_cuda <no_of_nodes> <start_node> <end_node> <percen
 |- percent - expected number of edges (no_of_nodes^2*percent)
 Samples:
 
-mpirun -n 4 bfs_mpi_no_cuda 10000 0 9999 0.0003
-mpirun -n 3 bfs_mpi_no_cuda 1000 0 999 0.003
+mpirun -n 4 bfs_mpi_no_cuda 10000 0 9999 0.0003  
+mpirun -n 3 bfs_mpi_no_cuda 1000 0 999 0.003  
 mpirun -n 2 bfs_mpi_no_cuda 100 0 99 0.03
 
 ### BFS CUDA No MPI
@@ -122,8 +122,8 @@ cd bfs_cuda
 |- percent - expected number of edges (no_of_nodes^2*percent)
 Samples:
 
-./bfs_cuda_no_mpi 10000 0 9999 0.0003
-./bfs_cuda_no_mpi 1000 0 999 0.003
+./bfs_cuda_no_mpi 10000 0 9999 0.0003  
+./bfs_cuda_no_mpi 1000 0 999 0.003  
 ./bfs_cuda_no_mpi 100 0 99 0.03
 
 
@@ -139,8 +139,8 @@ mpirun -n <nprocs> bfs_mpi_cuda <no_of_nodes> <start_node> <end_node> <percent>
 |- percent - expected number of edges (no_of_nodes^2*percent)
 Samples:
 
-mpirun -n 4 bfs_mpi_cuda 10000 0 9999 0.0003
-mpirun -n 3 bfs_mpi_cuda 1000 0 999 0.003
+mpirun -n 4 bfs_mpi_cuda 10000 0 9999 0.0003  
+mpirun -n 3 bfs_mpi_cuda 1000 0 999 0.003  
 mpirun -n 2 bfs_mpi_cuda 100 0 99 0.03
 
 ### ASTAR SERIAL
@@ -157,8 +157,8 @@ cd astar_serial
 |- heuristic - manhattan or euclidean
 Samples:
 
-./astar_serial 100 0 9999 0.05 1 manhattan
-./astar_serial 50 0 2499 0.05 1 manhattan
+./astar_serial 100 0 9999 0.05 1 manhattan  
+./astar_serial 50 0 2499 0.05 1 manhattan  
 ./astar_serial 10 0 99 0.05 1 manhattan
 
 ###BFS MPI No CUDA PATH
@@ -178,9 +178,9 @@ mpirun -n <nprocs> bfs_mpi_no_cuda_path <start> <end>
 |- end bet. 0 and 558328
 
 Samples:
-mpirun -n 4 bfs_mpi_no_cuda_path 1000 0 999999
-mpirun -n 3 bfs_mpi_no_cuda_path 100 0 9999
-mpirun -n 2 bfs_mpi_no_cuda_path 10 0 99
+mpirun -n 4 bfs_mpi_no_cuda_path 1000 0 999999  
+mpirun -n 3 bfs_mpi_no_cuda_path 100 0 9999  
+mpirun -n 2 bfs_mpi_no_cuda_path 10 0 99  
 mpirun -n 2 bfs_mpi_no_cuda_path 0 500000
 
 ###BFS CUDA No MPI PATH
@@ -200,9 +200,9 @@ cd bfs_cuda_path
 |- end bet. 0 and 558328
 
 Samples:
-./bfs_cuda_no_mpi_path 1000 0 999999
-./bfs_cuda_no_mpi_path 100 0 9999
-./bfs_cuda_no_mpi_path 10 0 99
+./bfs_cuda_no_mpi_path 1000 0 999999  
+./bfs_cuda_no_mpi_path 100 0 9999  
+./bfs_cuda_no_mpi_path 10 0 99  
 ./bfs_cuda_no_mpi_path 0 558328
 
 ###BFS CUDA MPI PATH
@@ -221,9 +221,9 @@ mpirun -n <nprocs> bfs_mpi_cuda_path <start> <end>
 |- end bet. 0 and 558328
 
 Samples:
-mpirun -n 4 bfs_mpi_cuda_path 1000 0 999999
-mpirun -n 3 bfs_mpi_cuda_path 100 0 9999
-mpirun -n 2 bfs_mpi_cuda_path 10 0 99
+mpirun -n 4 bfs_mpi_cuda_path 1000 0 999999  
+mpirun -n 3 bfs_mpi_cuda_path 100 0 9999  
+mpirun -n 2 bfs_mpi_cuda_path 10 0 99  
 mpirun -n 2 bfs_mpi_cuda_path 0 500000
 
 
