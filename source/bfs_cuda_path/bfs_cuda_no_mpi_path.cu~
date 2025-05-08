@@ -1,0 +1,374 @@
+/*
+	astar cuda no mpi
+	compile: nvcc -ICommon -I/usr/local/include/igraph -L/usr/local/lib -ligraph astar_cuda.cu
+	run: ./a.out < grid_size> <start> <end>
+
+*/
+#include <igraph.h>
+#include <stdio.h>
+#include <cmath>
+#include <math.h>
+
+#include <iostream>
+#include <sys/time.h>
+#include <random>
+#include <climits>
+#include <cstdint>
+#include <inttypes.h>
+
+using namespace std;
+using std::cout;
+using std::cerr;
+using std::endl;
+
+#include <cuda_runtime.h>
+#include <cuda_profiler_api.h>
+#include <helper_functions.h>
+#include <helper_cuda.h>
+
+int astar(uint64_t* src, uint64_t* dst, uint64_t no_of_nodes, uint64_t start, uint64_t end, string heuristic);
+
+
+void output_vec(int * data, int data_size) {
+  for (int i = 0; i < data_size; i ++ ) {
+    printf("%d ", data[i]);
+  }
+  printf("\n");
+}
+void output_vector(uint64_t * data, int data_size) {
+     for (int i = 0; i < data_size; i ++) {
+     	 printf("%*" PRIu64" ", 10, data[i]);
+     }
+     printf("\n");
+}
+
+void output_graph(int * graph, int graph_size) {
+  for (int i = 0; i < graph_size*graph_size; i++) {
+    if (i%graph_size == 0)
+      printf("\n");
+    printf("%*d", 7, graph[i]);
+    
+  }
+  printf("\n");
+}
+
+void output_tail(int* graph, int graph_size, int tail_count) {
+     uint64_t no_of_nodes = graph_size*graph_size;
+     for (int i = 5 ; i >= 1; i--) {
+     	 printf("%*" PRIu64  "", 3, graph[no_of_nodes-i]);
+     }
+     printf("\n");
+}
+void output_score(uint64_t * data, uint64_t grid_size) {
+     for (uint64_t i = 0; i < grid_size*grid_size; i++) {
+     	 if (i%grid_size == 0)
+	    printf("\n");
+     	 printf("%*" PRIu64  "", 10, data[i]);
+     }
+     printf("\n");
+}
+
+void output_end(uint64_t * data, uint64_t data_size, uint64_t tail_count) {
+     for (uint64_t i = tail_count; i >= 1; i--) {
+     	 printf("%*" PRIu64  "", 10, data[data_size-i]);
+     }
+     printf("\n");
+}
+
+
+
+__global__ void calculate_heuristic(uint64_t * d_hList, uint64_t grid_size, uint64_t no_of_nodes, uint64_t end, uint64_t heuristic_type) {
+	   uint64_t i = blockDim.x*blockIdx.x+threadIdx.x;
+	   uint64_t row_diff, col_diff;
+	   //printf("%*" PRIu64  "\n", 10, i);
+
+	   if (i < no_of_nodes) {
+ 	      if (end > i) {
+	      	 row_diff = end - i;
+		 col_diff = end -i;
+	      } else {
+	      	row_diff = i - end;
+		col_diff = i-end;
+	      }
+	      row_diff /= grid_size;
+	      col_diff %= grid_size;
+	      //printf("i: %" PRIu64 " row_diff: %" PRIu64 " col_diff: %" PRIu64 "\n", i, row_diff, col_diff);
+	      if (heuristic_type == 0)
+	      	 d_hList[i] = row_diff + col_diff;
+	      else
+		d_hList[i] = pow(row_diff*row_diff+col_diff*col_diff, 0.5);
+	   }
+}
+
+__global__ void astar_k(uint64_t * d_openList, uint64_t * d_closedList, uint64_t * d_src, uint64_t * d_dst, uint64_t * d_gList, uint64_t * d_hList,uint64_t * d_parent, uint64_t * d_flag, uint64_t grid_size, uint64_t no_of_nodes) {
+	   uint64_t i = blockDim.x * blockIdx.x + threadIdx.x;
+	   uint64_t g_score;
+
+	   if (i < no_of_nodes && d_openList[i] == 1) {
+	      *d_flag = 1;
+
+	      d_openList[i] = 0;
+	      d_closedList[i] = 1;
+	      uint64_t start = d_src[i];
+	      uint64_t end = d_src[i+1];
+
+	      for (uint64_t j = start; j < end; j ++) {
+	      	  
+	      	  uint64_t nb = d_dst[j];
+		 
+		  if (d_closedList[nb] == 1)
+		     continue;
+		 
+		  g_score = d_gList[i]+1;
+		  if (d_openList[nb] == 0)
+		     d_openList[nb] = 1;
+		  else if (d_gList[nb] != 0 && g_score >= d_gList[nb])
+		       continue;
+		  d_gList[nb] = g_score;
+		  d_parent[nb] = i;
+		 
+		  
+	      }
+	   }
+}
+	       
+int astar (uint64_t* src, uint64_t* dst, uint64_t no_of_nodes, uint64_t grid_size, uint64_t start, uint64_t end, string heuristic, uint64_t * final_path) {
+    uint64_t heuristic_type;
+    uint64_t no_of_edges = src[no_of_nodes];
+    if (heuristic == "manhattan")
+       heuristic_type = 0;
+    else
+	heuristic_type = 1;
+
+   
+    uint64_t * hList = new uint64_t[no_of_nodes];
+
+    uint64_t * d_hList;
+    uint64_t * d_gList;
+    uint64_t * d_openList;
+    uint64_t * d_closedList;
+    uint64_t * d_flag;
+    uint64_t * d_src;
+    uint64_t * d_dst;
+    uint64_t * d_parent;
+    
+
+    uint64_t threads = 1000;
+    uint64_t grid = no_of_nodes/threads;
+    if (no_of_nodes%threads != 0)
+       grid++;
+
+    printf("grid: %*" PRIu64 " threads: %*" PRIu64 "\n", 10, grid, 10, threads);
+
+    cudaMalloc(&d_hList, no_of_nodes*sizeof(uint64_t));
+    
+    calculate_heuristic<<<grid, threads>>>(d_hList, grid_size, no_of_nodes, end, heuristic_type);
+
+
+    cudaMalloc(&d_gList, no_of_nodes*sizeof(uint64_t));
+    cudaMalloc(&d_openList, no_of_nodes*sizeof(uint64_t));
+    cudaMalloc(&d_closedList, no_of_nodes*sizeof(uint64_t));
+    cudaMalloc(&d_flag, sizeof(uint64_t));
+    cudaMalloc(&d_src, (no_of_nodes+1)*sizeof(uint64_t));
+    cudaMalloc(&d_dst, no_of_edges*sizeof(uint64_t));
+    cudaMalloc(&d_parent, no_of_nodes*sizeof(uint64_t));
+
+    
+
+    cudaMemcpy(hList, d_hList, no_of_nodes*sizeof(uint64_t), cudaMemcpyDeviceToHost);
+
+    //output_score(hList, grid_size);
+
+    //output_end(hList, no_of_nodes, 5);
+
+    uint64_t * openList = new uint64_t[no_of_nodes];
+    uint64_t * closedList = new uint64_t[no_of_nodes];
+    uint64_t * gList = new uint64_t[no_of_nodes];
+    uint64_t * nVV = new uint64_t[no_of_nodes];
+    uint64_t * parent = new uint64_t[no_of_nodes];
+    for (uint64_t i = 0; i < no_of_nodes; i++) {
+    	openList[i] = 0;
+    }
+
+    *nVV = 1;
+    openList[start] = 1;
+
+    cudaMemcpy(d_openList, openList, no_of_nodes*sizeof(uint64_t), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_src, src, no_of_nodes*sizeof(uint64_t), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_dst, dst, no_of_edges*sizeof(uint64_t), cudaMemcpyHostToDevice);
+
+    while (*nVV == 1) {
+    	  *nVV = 0;
+	  cudaMemcpy(d_flag, nVV, sizeof(uint64_t), cudaMemcpyHostToDevice);
+	  astar_k<<<grid, threads>>>(d_openList, d_closedList, d_src, d_dst, d_gList, d_hList, d_parent, d_flag, grid_size, no_of_nodes);
+	  cudaMemcpy(nVV, d_flag, sizeof(uint64_t), cudaMemcpyDeviceToHost);
+    }
+    cudaMemcpy(gList, d_gList, no_of_nodes*sizeof(uint64_t), cudaMemcpyDeviceToHost);
+    cudaMemcpy(parent, d_parent, no_of_nodes*sizeof(uint64_t), cudaMemcpyDeviceToHost);
+    //output_score(gList, grid_size);
+//    output_score(parent, grid_size);
+    vector<uint64_t> path;
+    if (gList[end] != 0) {
+       uint64_t current = end;
+       while (current != start) {
+       	     path.push_back(current);
+	     current = parent[current];
+       }
+       path.push_back(current);	     
+       uint64_t * path_arr = &path[0];
+       output_vector(path_arr, path.size());
+       return gList[end];
+       }
+    else
+	return -1;
+}
+
+// single source to single destination path
+int main(int argc, char* argv[]) {
+    uint64_t grid_size;
+    uint64_t start;
+    uint64_t end;
+    
+    string heuristic;
+
+  long astar_start, astar_end, astar_elapsed;
+  
+  struct timeval timecheck;
+
+  if (argc == 4) {
+    int i = 1;
+    grid_size = atoi(argv[i++]);
+    start = atoi(argv[i++]);
+    end = atoi(argv[i++]);
+//    heuristic = argv[i++];
+  }
+  else {
+    grid_size = 10;
+    start = 0;
+    end = grid_size*grid_size - 1;
+    heuristic = "manhattan";
+  }
+  if (start>= grid_size*grid_size || end>= grid_size*grid_size) {
+    printf("Error: start %d end %d has to be valid node[0-%d]\n",start,end, grid_size );
+  }
+
+  igraph_t igraph;
+  igraph_vector_int_t dimvector;
+  igraph_vector_int_t edges;
+  igraph_vector_bool_t periodic;
+    
+  igraph_adjlist_t al;
+  
+  FILE * output;
+
+  output = fopen("output.dot", "w");
+
+  // Create graph
+
+  igraph_vector_int_init(&dimvector, 2);
+  VECTOR(dimvector) [0] = grid_size;
+  VECTOR(dimvector) [1] = grid_size;
+
+  igraph_vector_bool_init(&periodic, 2);
+  igraph_vector_bool_fill(&periodic, false);
+  igraph_square_lattice(&igraph, &dimvector, 0, IGRAPH_UNDIRECTED, /* mutual= */ false, &periodic);
+
+  igraph_rng_seed(igraph_rng_default(), 42);
+  
+  igraph_vector_int_init(&edges, grid_size);
+  for (igraph_integer_t i = 0; i < igraph_vector_int_size(&edges); i++) {
+      VECTOR(edges)[i] = RNG_INTEGER(1, igraph_vcount(&igraph) - 1);
+  }
+  igraph_add_edges(&igraph, &edges, NULL);
+
+  // write small graphs for analysis
+  
+  if (output != NULL && grid_size <=10) {
+     igraph_write_graph_dot(&igraph, output);
+  }
+
+
+  // create adjacency list
+  uint64_t total_src = igraph_vcount(&igraph) + 1;
+  uint64_t total_dst = igraph_ecount(&igraph)*2;
+  printf("total src : %d total_dst: %d \n", total_src, total_dst);
+  uint64_t * src = new uint64_t[total_src];
+  uint64_t * dst = new uint64_t[total_dst];
+  uint64_t dst_index = 0;
+  uint64_t src_index = 0;
+
+
+
+  igraph_adjlist_init(&igraph, &al, IGRAPH_ALL, IGRAPH_NO_LOOPS, IGRAPH_NO_MULTIPLE );
+  // must do copy from adj list to array for cuda
+  for (igraph_integer_t i = 0; i < total_src-1; i++) {
+      igraph_vector_int_t *v_list = igraph_adjlist_get(&al, i);
+
+      src[src_index] = dst_index;
+
+      for (igraph_integer_t j = 0; j < igraph_vector_int_size(v_list); j++) {
+
+	  dst[dst_index] = VECTOR(*v_list)[j];
+	  dst_index ++;
+      }
+      src_index ++;
+
+  }
+  src[src_index] = dst_index;
+
+  
+  
+  printf("total src : %d total_dst: %d \n", total_src, total_dst);
+  output_end(src, total_src, 5);
+  output_end(dst, total_dst, 5); 
+
+  uint64_t no_of_nodes = grid_size*grid_size;
+  printf("start : %d end: %d no_of_nodes : %" PRIu64 "\n",start, end, no_of_nodes);
+  
+  gettimeofday(&timecheck, NULL);
+  astar_start = (long) timecheck.tv_sec*1000 + (long)timecheck.tv_usec / 1000;
+
+  uint64_t * final_path = new uint64_t[1000];
+
+  int astar_result = astar(src, dst, no_of_nodes,grid_size,start, end, heuristic, final_path);
+  //output_end(final_path, astar_result+1, astar_result+1);
+  printf("bfs_result: %d\n", astar_result);
+  gettimeofday(&timecheck, NULL);
+  astar_end = (long) timecheck.tv_sec*1000 + (long)timecheck.tv_usec / 1000;
+
+  astar_elapsed = astar_end - astar_start;
+
+  printf("***********************\n");
+  printf("no_of_nodes: %d time: %d\n", grid_size*grid_size, astar_elapsed);
+    
+  return 0;
+}
+  /*
+  //igraph_vector_int_init(&allvertices, igraph_vcount(&igraph));
+  // need iterator and selector - prints all vertex IDs
+   printf("%" IGRAPH_PRId " \n", size);
+  for (; !IGRAPH_VIT_END(vit); IGRAPH_VIT_NEXT(vit)) {
+      printf("%" IGRAPH_PRId " \n", IGRAPH_VIT_GET(vit) );
+  }
+  
+  igraph_es_incident(&es, 1, IGRAPH_ALL);
+  igraph_es_size(&igraph, &es, &es_size);
+  igraph_vector_int_init(&v_edges, es_size);
+  igraph_edges(&igraph,es,&v_edges);
+
+  
+  
+//  igraph_es_all(&es, IGRAPH_EDGEORDER_ID);
+//  igraph_eit_create(&igraph, es, &eit);
+  
+
+
+  //printf("%" IGRAPH_PRId " \n", es_size);
+  //igraph_es_as_vector(&igraph, es, &alledges);
+  //for (; !IGRAPH_EIT_END(eit); IGRAPH_EIT_NEXT(eit)) {
+  //    printf("%" IGRAPH_PRId " \n", IGRAPH_EIT_GET(eit) );
+  //}
+  for (igraph_integer_t i = 0; i < igraph_vector_int_size(&v_edges); i+=2) {
+      printf("%" IGRAPH_PRId " -- %" IGRAPH_PRId " \n", VECTOR(v_edges)[i], VECTOR(v_edges)[i+1] );
+      }
+      */

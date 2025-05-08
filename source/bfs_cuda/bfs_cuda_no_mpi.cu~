@@ -1,0 +1,263 @@
+/*
+	bfs cuda no mpi
+	compile: nvcc -ICommon bfs_cuda_no_mpi.cu
+	run: ./a.out <no_of_nodes> <start_node> <end_node> <percent>
+*/
+#include <iostream>
+#include <cmath>
+#include <math.h>
+#include <vector>
+#include <iostream>
+#include <limits.h>
+#include <random>
+
+using namespace std;
+
+using std::cout;
+using std::cerr;
+using std::endl;
+
+#include <cuda_runtime.h>
+#include <cuda_profiler_api.h>
+#include <helper_functions.h>
+#include <helper_cuda.h>
+
+#define NO_OF_NODES 9;
+
+void output_vec(int * arr, int arr_size) {
+     for (int i = 0; i < arr_size; i++){
+     	 printf("%d ", arr[i]);
+     }
+     printf("\n");
+}
+
+class CSR {
+   public:
+      int* srcPtrs;
+      int srcPtrs_size;
+      int* dst;
+      int dst_size;
+        CSR(int no_of_nodes, float percent) {
+    random_device rd;
+    mt19937 gen(rd());
+    uniform_real_distribution<> dis(0.0,1/percent);
+    vector<int> v_srcPtrs;
+    vector<int> v_dst;
+    int row, col, edge;
+    for (int i = 0; i < no_of_nodes * no_of_nodes; i++) {
+      row = i / no_of_nodes;
+      col = i % no_of_nodes;
+
+      edge = dis(gen) < 1 ? 1 : 0;
+     
+      if (edge != 0) {
+
+	if (row == v_srcPtrs.size()) {
+	  v_srcPtrs.push_back(v_dst.size());
+	}
+	v_dst.push_back(col);
+      }
+      if (col == no_of_nodes - 1 && row == v_srcPtrs.size())
+	v_srcPtrs.push_back(v_dst.size());
+    }
+    v_srcPtrs.push_back(v_dst.size());
+    srcPtrs_size = v_srcPtrs.size();
+    dst_size = v_dst.size();
+    srcPtrs = new int[srcPtrs_size];
+    dst = new int[dst_size];
+    for (int i = 0; i < srcPtrs_size; i++ )
+      srcPtrs[i] = v_srcPtrs[i];
+    for (int i = 0; i < dst_size; i++)
+      dst[i] = v_dst[i];
+  }
+
+      CSR(int * graph, int no_of_nodes){
+      	  vector<int> v_srcPtrs;
+	  vector<int> v_dst;
+	  v_srcPtrs.push_back(0);
+	  for (int i = 0; i < no_of_nodes*no_of_nodes; i ++) {
+
+      	      int row = i / no_of_nodes;
+	      int col = i % no_of_nodes;
+	      if (graph[i] != 0){
+		 // new row
+		 if (row == v_srcPtrs.size()) {
+		    v_srcPtrs.push_back(v_dst.size());
+		 }
+		 v_dst.push_back(col);
+	      }
+	      if (col == no_of_nodes - 1 && row == v_srcPtrs.size())
+	      	 v_srcPtrs.push_back(v_dst.size());
+	  }
+	  v_srcPtrs.push_back(v_dst.size());
+	  srcPtrs_size = v_srcPtrs.size();
+	  srcPtrs = new int[srcPtrs_size];
+	  dst_size = v_dst.size();
+	  dst = new int[dst_size];
+	  for (int i = 0; i < srcPtrs_size; i++){
+	      srcPtrs[i] = v_srcPtrs[i];
+	  }
+	  for (int i = 0; i < dst_size; i ++){
+	      dst[i] = v_dst[i];
+	  }
+      }
+
+};
+
+__global__ void bfs_kernel(int * d_srcPtrs, int* d_dst, int no_of_nodes, int start_node, int end_node, int * level, int currLevel, int * newVertexVisited){
+	int i = blockDim.x*blockIdx.x+threadIdx.x;
+
+	if (i < no_of_nodes) {
+	   if (level[i] == currLevel -1){
+
+	      int start = d_srcPtrs[i];
+	      int end = d_srcPtrs[i+1];
+
+	      for(int j = start; j < end; j++) {
+
+	      	      int neighbor = d_dst[j];
+
+		      if (level[neighbor] == INT_MAX) {
+
+		      	 level[neighbor] = currLevel;
+			 *newVertexVisited = 1;
+
+
+		      }
+	      }
+	   }
+
+	}
+}
+
+int bfs(CSR* csr, int no_of_nodes, int start_node, int end_node, int grid, int threads){
+    int* d_srcPtrs;
+    int * d_dst;
+    int * d_level;
+    int * d_flag;
+    
+    int* srcPtrs = csr -> srcPtrs;
+    int srcPtrs_size = csr -> srcPtrs_size;
+    int * dst = csr -> dst;
+    int dst_size = csr -> dst_size;
+    int * level = new int[no_of_nodes];
+
+    level[0] = 0;
+
+    for (int i = 1; i < no_of_nodes; i ++){
+    	     level[i] = INT_MAX;
+    }
+
+    int *newVertex = new int[1];
+
+    int currLevel = 1;
+
+    cudaMalloc(&d_srcPtrs, srcPtrs_size*sizeof(int));
+    cudaMalloc(&d_dst, dst_size*sizeof(int));
+    cudaMalloc(&d_level, no_of_nodes*sizeof(int));
+    cudaMalloc(&d_flag, sizeof(int));
+
+    cudaMemcpy(d_srcPtrs, srcPtrs, srcPtrs_size*sizeof(int),cudaMemcpyHostToDevice);
+    cudaMemcpy(d_dst, dst, dst_size*sizeof(int),cudaMemcpyHostToDevice);
+    cudaMemcpy(d_level, level, no_of_nodes*sizeof(int),cudaMemcpyHostToDevice);
+
+
+    *newVertex = 1;
+    while (*newVertex == 1){
+    	  *newVertex = 0;
+
+	  cudaMemcpy(d_flag, newVertex, sizeof(int), cudaMemcpyHostToDevice);
+
+	  bfs_kernel<<<grid, threads>>>(d_srcPtrs, d_dst, no_of_nodes, start_node, end_node, d_level, currLevel, d_flag);
+	  cudaMemcpy(newVertex, d_flag, sizeof(int), cudaMemcpyDeviceToHost);
+	  
+	  currLevel++;
+    }
+    cudaMemcpy(level, d_level, no_of_nodes*sizeof(int), cudaMemcpyDeviceToHost);
+    output_vec(level, no_of_nodes);
+    if (level[end_node] != INT_MAX)
+       return 1;
+    else
+	return -1;
+
+    
+}
+
+
+int main(int argc, char* argv[]){
+    
+    int no_of_nodes;
+    int start_node;
+    int end_node;
+    float percent;
+    CSR * csr;
+
+    long bfs_start, bfs_end, bfs_elapsed;
+      cudaDeviceProp prop;
+  cudaGetDeviceProperties(&prop,0);
+
+  
+  printf("prop.name=%s\n", prop.name);
+  printf("prop.multiProcessorCount=%d\n", prop.multiProcessorCount);
+  printf("prop.major=%d minor=%d\n", prop.major, prop.minor);
+  printf("prop.maxThreadsPerBlock=%d\n", prop.maxThreadsPerBlock);
+  printf("maxThreadsDim.x=%d maxThreadsDim.y=%d maxThreadsDim.z=%d\n", prop.maxThreadsDim[0],prop.maxThreadsDim[1],prop.maxThreadsDim[2]);
+  printf("prop.maxGridSize.x=%d maxGridSize.y=%d maxGridSize.z=%d\n", prop.maxGridSize[0],prop.maxGridSize[1],prop.maxGridSize[2]);
+  printf("prop.maxThreadsPerMultiProcessor=%d\n", prop.maxThreadsPerMultiProcessor);
+  printf("prop.totalGlobalMem=%u\n", prop.totalGlobalMem);
+  printf("prop.regsPerBlock=%d\n", prop.regsPerBlock);
+  
+  printf("\n");
+
+
+    struct timeval timecheck;
+    if (argc == 5){
+       int i = 1;
+       no_of_nodes = atoi(argv[i++]);
+       start_node = atoi(argv[i++]);
+       end_node = atoi(argv[i++]);
+       percent = atof(argv[i++]);
+    } else {
+      no_of_nodes = 10;
+      start_node = 0;
+      end_node = no_of_nodes -1;
+      percent = 0.2;
+    }
+    if (start_node >= no_of_nodes || end_node >= no_of_nodes || start_node < 0 || end_node < 0) {
+    printf("Error: start_node %d or end_node %d has to be valid node[0-%d]\n", start_node, end_node, no_of_nodes);
+      }  
+      
+    csr = new CSR(no_of_nodes, percent);
+    
+    
+    
+    
+    int o_dst_size = csr -> dst_size;
+   
+    printf("dst_size: %d\n", o_dst_size);
+    printf("start: %d\n", start_node);
+    printf("end: %d\n", end_node);
+    
+    int grid = 1000;
+    int threads = no_of_nodes/grid;
+    if (no_of_nodes%grid != 0)
+       threads++;
+
+    gettimeofday(&timecheck, NULL);
+    bfs_start = (long) timecheck.tv_sec*1000 + (long)timecheck.tv_usec/ 1000;
+    
+    int bfs_result = bfs(csr, no_of_nodes,start_node, end_node, grid, threads);
+
+    if (bfs_result == 1)
+      printf("bfs_result: path exists\n");
+    if (bfs_result == -1)
+      printf("bfs_result: path dne\n");
+
+    gettimeofday(&timecheck, NULL);
+    bfs_end = (long) timecheck.tv_sec * 1000 + (long)timecheck.tv_usec / 1000;
+
+    bfs_elapsed = bfs_end - bfs_start;
+
+    printf("*******************\n");
+    printf("nodes: %d grid: %d threads: %d time: %ld msecs\n", no_of_nodes, grid, threads, bfs_elapsed);
+}
