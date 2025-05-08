@@ -2,75 +2,75 @@
 ## Make sure that igraph is installed in the machines
 source/
 
-|- bfs_serial
+|- bfs_serial/
 
-   |- bfs_serial.cpp
+   |-- bfs_serial.cpp
    
-   |- bfs_serial
+   |-- bfs_serial
 
-|- bfs_mpi
+|- bfs_mpi/
 
-   |- bfs_mpi_no_cuda.cpp
+   |-- bfs_mpi_no_cuda.cpp
    
-   |- bfs_mpi_no_cuda
+   |-- bfs_mpi_no_cuda
 
-|- bfs_cuda
+|- bfs_cuda/
 
-   |- bfs_cuda_no_mpi.cu
+   |-- bfs_cuda_no_mpi.cu
    
-   |- bfs_cuda_no_mpi
+   |-- bfs_cuda_no_mpi
 
-|- bfs_mpi_cuda
+|- bfs_mpi_cuda/
 
-   |- bfs_mpi.cpp
+   |-- bfs_mpi.cpp
    
-   |- bfs_cuda.cu
+   |-- bfs_cuda.cu
    
-   |- bfs_mpi.o
+   |-- bfs_mpi.o
    
-   |- bfs_cuda.o
+   |-- bfs_cuda.o
    
-   |- common_functions_bfs.h
+   |-- common_functions_bfs.h
    
-   |- bfs_mpi_cuda
+   |-- bfs_mpi_cuda
 
-|- astar_serial
+|- astar_serial/
 
-   |- astar_serial.cpp
+   |-- astar_serial.cpp
    
-   |- astar_serial
+   |-- astar_serial
 
-|- bfs_mpi_path
+|- bfs_mpi_path/
 
-   |- bfs_mpi_no_cuda_path.cpp
+   |-- bfs_mpi_no_cuda_path.cpp
    
-   |- bfs_mpi_no_cuda_path
+   |-- bfs_mpi_no_cuda_path
    
-   |- output.dot
+   |-- output.dot
 
-|- bfs_cuda_path
+|- bfs_cuda_path/
 
-   |- bfs_cuda_no_mpi_path.cu
+   |-- bfs_cuda_no_mpi_path.cu
    
-   |- bfs_cuda_no_mpi_path
+   |-- bfs_cuda_no_mpi_path
    
-   |- output.dot
+   |-- output.dot
 
-|- bfs_mpi_cuda_path
+|- bfs_mpi_cuda_path/
 
-   |- bfs_mpi_path.cpp
+   |-- bfs_mpi_path.cpp
    
-   |- bfs_cuda_path.cu
+   |-- bfs_cuda_path.cu
    
-   |- bfs_mpi_path.o
+   |-- bfs_mpi_path.o
    
-   |- bfs_cuda_path.o
+   |-- bfs_cuda_path.o
    
-   |- common_functions_bfs_path.h
+   |-- common_functions_bfs_path.h
    
-   |- bfs_mpi_cuda_path
+   |-- bfs_mpi_cuda_path
    
-   |- output.dot
+   |-- output.dot
 
 |- Common/  
 
