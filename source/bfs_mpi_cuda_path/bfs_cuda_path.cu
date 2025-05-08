@@ -159,6 +159,7 @@ __global__ void astar_kernel(uint64_t * d_openList, uint64_t * d_closedList, uin
 		  g_score = d_gList[i]+1;
 		  if (d_openList[nb] == 0) {
 		     d_openList[nb] = 1;
+		     d_flag[my_rank] = 1;
 //		     printf("my_rank: %d after openList set neighbor: %" PRIu64 " parent: %" PRIu64 " openList: %" PRIu64 "\n", my_rank, nb, i, d_openList[nb]);		 
 		     
 		     }
@@ -169,6 +170,7 @@ __global__ void astar_kernel(uint64_t * d_openList, uint64_t * d_closedList, uin
 		       }
 		  d_gList[nb] = g_score;
 		  d_parent[nb] = i;
+		  d_flag[my_rank] = 1;		  
 //		  printf("my_rank: %d after g set neighbor: %" PRIu64 " g: %" PRIu64 " parent: %" PRIu64 " openList: %" PRIu64 "\n", my_rank, nb, g_score, i, d_openList[nb]);		 
 		 
 		  
@@ -225,7 +227,7 @@ int astar_cuda (uint64_t * openList, uint64_t* closedList, uint64_t* src, uint64
     cudaMemcpy(d_parent, parent, no_of_nodes*sizeof(uint64_t), cudaMemcpyHostToDevice);
     nVVBuf[my_rank] = 0;
     cudaMemcpy(d_flag, nVVBuf, nprocs*sizeof(uint64_t), cudaMemcpyHostToDevice);
-    printf("my_rank: %d no_of_nodes: %" PRIu64" \n",my_rank,no_of_nodes);
+    //printf("my_rank: %d no_of_nodes: %" PRIu64" \n",my_rank,no_of_nodes);
     astar_kernel<<<grid, threads>>>(d_openList, d_closedList, d_src, d_dst, d_gList, d_hList, d_parent, d_flag, no_of_nodes, my_rank, nprocs);
     cudaMemcpy(nVVBuf, d_flag, nprocs*sizeof(uint64_t), cudaMemcpyDeviceToHost);
     

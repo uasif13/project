@@ -372,8 +372,14 @@ run: build
 testrun: build
 
 clean:
-	rm -f bfs bfs_mpi.o bfs_cuda.o
-	rm -f astar astar_mpi.o astar_cuda.o
+	$(EXEC) rm -f bfs_mpi_cuda/bfs_mpi_cuda bfs_mpi_cuda/bfs_mpi.o bfs_mpi_cuda/bfs_cuda.o 
+	rm -f bfs_mpi_cuda_path/bfs_mpi_cuda_path bfs_mpi_cuda_path/bfs_mpi_path.o bfs_mpi_cuda_path/bfs_cuda_path.o
+	rm -f bfs_serial/bfs_serial
+	rm -f bfs_mpi/bfs_mpi_no_cuda
+	rm -f bfs_cuda/bfs_cuda_no_mpi
+	rm -f astar_serial/astar_serial
+	rm -f bfs_mpi_path/bfs_mpi_no_cuda_path
+	rm -f bfs_cuda_path/bfs_cuda_no_mpi_path
 	rm -rf ../../bin/$(TARGET_ARCH)/$(TARGET_OS)/$(BUILD_TYPE)/simpleMPI
 
 clobber: clean
